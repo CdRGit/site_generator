@@ -18,7 +18,7 @@ page {
 			h1.title $/title
 		}
 		main {
-			h1 "main body"
+			h1 [color "green"] "main body"
 			p {
 				"this is a simple hello world page"
 				"named '$(/title)'"
