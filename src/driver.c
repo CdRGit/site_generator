@@ -7,36 +7,42 @@
 
 const char* usage_format = "Usage: %s [options] file...\n";
 
-static bool parse_args(sitegen_settings* settings, int argc, char** argv);
+static bool parse_args(sitegen_context* context, int argc, char** argv);
 static void arg_shift(int* argc, char*** argv);
 
 int main(int argc, char** argv) {
-	sitegen_settings* settings = sitegen_settings_create();
-	assert(settings);
+	sitegen_context* context = sitegen_context_create();
+	assert(context);
 
 	char* program_name = *argv;
 	arg_shift(&argc, &argv);
 
-	if (!parse_args(settings, argc, argv) || settings->help) {
+	if (!parse_args(context, argc, argv) || context->help || 0 == vector_count(context->files)) {
 		printf(usage_format, program_name);
-		sitegen_settings_destroy(settings);
+		sitegen_context_destroy(context);
 		return 0;
 	}
 
-	sitegen_settings_destroy(settings);
+	for (int i = 0; i < vector_count(context->files); i++) {
+		sitegen_load_buffer(context, context->files[i]);
+	}
+
+	sitegen_generate(context);
+
+	sitegen_context_destroy(context);
 	return 0;
 }
 
-static bool parse_args(sitegen_settings* settings, int argc, char** argv) {
+static bool parse_args(sitegen_context* context, int argc, char** argv) {
 	if (argc == 0) return true;
 
 	if (false) {
 	} else {
-		vector_push(settings->files, stringview_create(argv[0], strlen(argv[0])));
+		vector_push(context->files, stringview_create(argv[0], strlen(argv[0])));
 	}
 
 	arg_shift(&argc, &argv);
-	return parse_args(settings, argc, argv);
+	return parse_args(context, argc, argv);
 }
 
 static void arg_shift(int* argc, char*** argv) {

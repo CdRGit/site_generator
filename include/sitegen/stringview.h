@@ -2,6 +2,7 @@
 #define SITEGEN_STRINGVIEW_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 typedef struct {
 	char* data;
@@ -9,5 +10,9 @@ typedef struct {
 } stringview;
 
 stringview stringview_create(char* data, size_t len);
+
+bool stringview_equal(stringview left, stringview right);
+
+#define STRINGVIEW_SPILL(sv) (int)(sv.len), (sv.data)
 
 #endif//SITEGEN_STRINGVIEW_H
