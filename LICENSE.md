@@ -1,5 +1,3 @@
-[note, to include/vector.h and lib/sitegen/vector.c other licensing applies, check those files for their copyright information]
-
 Copyright (c) 2023 Catelyn
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,3 +17,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+[note, to include/vector.h and lib/sitegen/vector.c other licensing applies, check those files for their copyright information]
