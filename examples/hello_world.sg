@@ -1,0 +1,38 @@
+meta {
+	style {
+		file "style.css"
+		h1.title {
+			color "red"
+		}
+	}
+	data {
+		author "Catelyn"
+	}
+}
+
+page {
+	file "index.html"
+	title "Hello, World!"
+	body {
+		header {
+			h1.title $/title
+		}
+		main {
+			h1 "main body"
+			p {
+				"this is a simple hello world page"
+				"named '$(/title)'"
+				"this should work hopefully"
+			}
+			p {
+				"yeeeeeeeeeeeeeeeee"
+				"catgirl coding go brrt"
+			}
+		}
+		footer {
+			"this has been"
+			$/title
+			"brought to you by $(:/author)"
+		}
+	}
+}
