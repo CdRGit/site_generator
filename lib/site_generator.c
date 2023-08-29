@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include "sitegen/lexer.h"
+
 #include "sitegen/site_generator.h"
 
 sitegen_context* sitegen_context_create(void) {
@@ -16,7 +18,12 @@ void sitegen_context_destroy(sitegen_context* context) {
 
 void sitegen_generate(sitegen_context* context) {
 	for (int i = 0; i < vector_count(context->buffers); i++) {
-		printf("%.*s:\n%.*s\n", STRINGVIEW_SPILL(context->buffers[i].path), STRINGVIEW_SPILL(context->buffers[i].data));
+		vector(token) tokens = lexer_tokenize(context->buffers[i].data);
+		printf("%.*s:\n", STRINGVIEW_SPILL(context->buffers[i].path));
+		for (int j = 0; j < vector_count(tokens); j++) {
+			token t = tokens[j];
+			printf("%s: %.*s\n", token_name(t), STRINGVIEW_SPILL(t.lexeme));
+		}
 	}
 	assert(false);
 }
