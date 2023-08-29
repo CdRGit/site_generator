@@ -1,38 +1,25 @@
-meta {
-	style {
-		file "style.css"
-		h1.title {
+data {
+	author "Catelyn"
+}
+
+style "style.css" {
+	header {
+		h1 {
 			color "red"
 		}
 	}
-	data {
-		author "Catelyn"
-	}
 }
 
-page {
-	file "index.html"
-	title "Hello, World!"
-	body {
-		header {
-			h1.title $/title
-		}
-		main {
-			h1 [color "green"] "main body"
-			p {
-				"this is a simple hello world page"
-				"named '$(/title)'"
-				"this should work hopefully"
-			}
-			p {
-				"yeeeeeeeeeeeeeeeee"
-				"catgirl coding go brrt"
-			}
-		}
-		footer {
-			"this has been"
-			$/title
-			"brought to you by $(:/author)"
+page "index.html" {
+	title "Hello, World"
+	header {
+		h1 $/title
+	}
+	main {
+		p {
+			"This is a test with 'regular' text"
+			"text has inline fuckery too"
+			"like $`code_snippets()` and $link("links", "https://catelyn.tech")"
 		}
 	}
 }
