@@ -1,0 +1,4 @@
+#ifndef SITEGEN_LEXER_H
+#define SITEGEN_LEXER_H
+
+#endif//SITEGEN_LEXER_H

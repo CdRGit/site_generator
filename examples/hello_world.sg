@@ -20,6 +20,7 @@ page "index.html" {
 			"This is a test with 'regular' text"
 			"text has inline fuckery too"
 			"like $`code_snippets()` and $link("links", "https://catelyn.tech")"
+			"made by $:author"
 		}
 	}
 }
