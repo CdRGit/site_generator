@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
+#include <locale.h>
 
 #include "sitegen/site_generator.h"
 
@@ -11,6 +12,7 @@ static bool parse_args(sitegen_context* context, int argc, char** argv);
 static void arg_shift(int* argc, char*** argv);
 
 int main(int argc, char** argv) {
+	char* l = setlocale(LC_ALL, "");
 	sitegen_context* context = sitegen_context_create();
 	assert(context);
 
@@ -21,10 +23,6 @@ int main(int argc, char** argv) {
 		printf(usage_format, program_name);
 		sitegen_context_destroy(context);
 		return 0;
-	}
-
-	for (int i = 0; i < vector_count(context->files); i++) {
-		sitegen_load_buffer(context, context->files[i]);
 	}
 
 	sitegen_generate(context);
