@@ -1,5 +1,6 @@
 #ifndef SITEGEN_DOCUMENT_TREE_H
 #define SITEGEN_DOCUMENT_TREE_H
+#include <stdint.h>
 
 #include "sitegen/site_generator.h"
 
@@ -7,15 +8,18 @@
 #include "sitegen/stringview.h"
 
 typedef enum {
-	NK_HEADER,
-	NK_PARAGRAPH,
-	NK_PLAINTEXT,
-	NK_DECORATION,
-	NK_LINEBREAK,
+	NK_THEMATIC_BREAK,
+	NK_TEMPORARY_TEXT,
 	NK_COUNT,
 } docnode_kind;
 
 typedef struct docnode docnode;
+
+// leaf blocks
+// 4.1 thematic breaks
+typedef struct {
+	uint32_t kind;
+} docnode_thematic_break;
 
 typedef struct {
 } docnode_trivial;
@@ -41,19 +45,24 @@ typedef struct {
 		DEC_STRIKETHROUGH,
 		DEC_SUPERSCRIPT,
 		DEC_SUBSCRIPT,
+		DEC_COUNT,
 	} decoration;
 	vector(docnode) subnodes;
 } docnode_decoration;
 
+typedef struct {
+	uint32_t* data;
+	size_t  length;
+} docnode_temporary_text;
+
 struct docnode {
 	docnode_kind kind;
-	_Static_assert(NK_COUNT == 5, "non-exhaustive");
+	_Static_assert(NK_COUNT == 2, "non-exhaustive");
 	union {
-		docnode_header      header;
-		docnode_paragraph   paragraph;
-		docnode_plaintext   plaintext;
-		docnode_decoration  decoration;
-		docnode_trivial     linebreak;
+		// leaf blocks
+		docnode_thematic_break thematic_break;
+
+		docnode_temporary_text temp_text;
 	} value;
 };
 

@@ -63,14 +63,103 @@ static uint32_t read_codepoint(int* index, stringview string) {
 	}
 }
 
+static docnode* parse_node_pass_1(vector(uint32_t) codepoints, size_t* index) {
+	docnode* node = (docnode*)malloc(sizeof(docnode));
+
+	uint32_t currently_active_char  = 0;
+	int currently_active_char_count = 0;
+	bool has_only_been_that = true;
+	int indent_depth = 0;
+	bool done_indenting = false;
+
+	size_t start = *index;
+	size_t start_of_line = *index;
+
+	while (*index < vector_count(codepoints)) {
+		uint32_t point = codepoints[(*index)++];
+		printf("char: %lc\n", point);
+		if (point == ' ') {
+			if (!done_indenting) indent_depth++;
+		} else if (point == '\t') {
+			if (!done_indenting) indent_depth += (4 - indent_depth % 4);
+		} else if (point == '\r' || point == '\n') {
+			uint32_t lookahead = codepoints[*index];
+			if (lookahead == '\n' && point != '\n') (*index)++; // consume '\n' in '\r\n' to ensure line ending
+			
+			if (currently_active_char_count == 0) {
+				// blank line!
+				printf("BLANK LINE :D\n");
+			} else {
+				printf("non-blank line :c\n");
+
+				if (has_only_been_that) {
+					printf("\tsingle char tho :D : %lc x %d\n", currently_active_char, currently_active_char_count);
+					switch (currently_active_char) {
+						case '*':
+						case '-':
+						case '_': {
+								if (currently_active_char_count >= 3) {
+									printf("\t THEMATIC BREAK LETS GO\n");
+									node->kind = NK_THEMATIC_BREAK;
+									node->value.thematic_break.kind = currently_active_char;
+									return node;
+								}
+							}
+							break;
+					}
+				}
+				else {
+					// ATX heading?
+					if (currently_active_char == '#') {
+						// ATX HEADING?! :D
+						// scan from start of line to now
+					}
+				}
+			}
+			currently_active_char = 0;
+			currently_active_char_count = 0;
+			has_only_been_that = true;
+			indent_depth = 0;
+			done_indenting = false;
+			start_of_line = *index;
+		} else if (currently_active_char_count == 0 || currently_active_char == point) {
+			done_indenting = true;
+			currently_active_char = point;
+			currently_active_char_count++;
+		} else {
+			has_only_been_that = false;
+		}
+	}
+	return node;
+}
+
+static document* parse_tree_pass_1(vector(uint32_t) codepoints) {
+	size_t index = 0;
+	document* pass1 = (document*)malloc(sizeof(document));
+	pass1->nodes = NULL;
+
+	while (index < vector_count(codepoints)) {
+		docnode* node = parse_node_pass_1(codepoints, &index);
+		vector_push(pass1->nodes, *node);
+		free(node);
+	}
+
+	assert(false && "TODO!");
+
+	return pass1;
+}
+
 document* parse_document_tree(sourcebuffer source) {
 	vector(uint32_t) doc_as_codepoints;
 	int index = 0;
 
 	uint32_t codepoint = 0;
 	while ((codepoint = read_codepoint(&index, source.data))) {
-		vector_push(doc_as_codepoints, codepoint);
+		vector_push(doc_as_codepoints, codepoint ? codepoint : 0xFFFD);
 	}
+	vector_push(doc_as_codepoints, 0);
+
+	document* pass1 = parse_tree_pass_1(doc_as_codepoints);
 
 	printf("Data:\n");
 	for (int i = 0; i < vector_count(doc_as_codepoints); i++) {
