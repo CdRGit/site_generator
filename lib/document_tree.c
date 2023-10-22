@@ -63,73 +63,103 @@ static uint32_t read_codepoint(int* index, stringview string) {
 	}
 }
 
+typedef struct {
+	uint32_t* data;
+	size_t len;
+} u32_stringview;
+
+static u32_stringview trim_whitespace(u32_stringview view) {
+	u32_stringview trimmed = view;
+
+	size_t start_idx = 0;
+
+	for (;;) {
+		uint32_t point = view.data[start_idx];
+		switch (point) {
+			case ' ':
+			case '\t':
+			case '\r':
+			case '\n':
+				start_idx++;
+				break;
+			default:
+				goto start_done;
+		}
+	}
+start_done:
+	trimmed.data += start_idx;
+	trimmed.len  -= start_idx;
+
+	size_t end_idx = trimmed.len - 1;
+	for (;;) {
+		uint32_t point = trimmed.data[end_idx];
+		switch (point) {
+			case ' ':
+			case '\t':
+			case '\r':
+			case '\n':
+				end_idx--;
+				break;
+			default:
+				goto end_done;
+		}
+	}
+end_done:
+	trimmed.len = end_idx + 1;
+
+	return trimmed;
+}
+
 static docnode* parse_node_pass_1(vector(uint32_t) codepoints, size_t* index) {
 	docnode* node = (docnode*)malloc(sizeof(docnode));
 
-	uint32_t currently_active_char  = 0;
-	int currently_active_char_count = 0;
-	bool has_only_been_that = true;
-	int indent_depth = 0;
-	bool done_indenting = false;
-
-	size_t start = *index;
-	size_t start_of_line = *index;
-
-	while (*index < vector_count(codepoints)) {
-		uint32_t point = codepoints[(*index)++];
-		printf("char: %lc\n", point);
-		if (point == ' ') {
-			if (!done_indenting) indent_depth++;
-		} else if (point == '\t') {
-			if (!done_indenting) indent_depth += (4 - indent_depth % 4);
-		} else if (point == '\r' || point == '\n') {
-			uint32_t lookahead = codepoints[*index];
-			if (lookahead == '\n' && point != '\n') (*index)++; // consume '\n' in '\r\n' to ensure line ending
-			
-			if (currently_active_char_count == 0) {
-				// blank line!
-				printf("BLANK LINE :D\n");
-			} else {
-				printf("non-blank line :c\n");
-
-				if (has_only_been_that) {
-					printf("\tsingle char tho :D : %lc x %d\n", currently_active_char, currently_active_char_count);
-					switch (currently_active_char) {
-						case '*':
-						case '-':
-						case '_': {
-								if (currently_active_char_count >= 3) {
-									printf("\t THEMATIC BREAK LETS GO\n");
-									node->kind = NK_THEMATIC_BREAK;
-									node->value.thematic_break.kind = currently_active_char;
-									return node;
-								}
-							}
-							break;
-					}
-				}
-				else {
-					// ATX heading?
-					if (currently_active_char == '#') {
-						// ATX HEADING?! :D
-						// scan from start of line to now
-					}
-				}
+	size_t end_index = *index;
+	// find end of line
+	while (codepoints[end_index] != 0) {
+		uint32_t point = codepoints[end_index++];
+		if (point == '\r') {
+			uint32_t newline_maybe = codepoints[end_index];
+			if (newline_maybe == '\n') {
+				end_index++;
 			}
-			currently_active_char = 0;
-			currently_active_char_count = 0;
-			has_only_been_that = true;
-			indent_depth = 0;
-			done_indenting = false;
-			start_of_line = *index;
-		} else if (currently_active_char_count == 0 || currently_active_char == point) {
-			done_indenting = true;
-			currently_active_char = point;
-			currently_active_char_count++;
-		} else {
-			has_only_been_that = false;
+			break;
+		} else if (point == '\n') {
+			break;
 		}
 	}
+	u32_stringview line;
+	line.data = codepoints + *index;
+	line.len = end_index - *index;
+	u32_stringview trimmed = trim_whitespace(line);
+	printf("line: \"%.*ls\"\n", STRINGVIEW_SPILL(trimmed));
+
+	uint32_t character = trimmed.data[0];
+	size_t length = 0;
+
+	while (trimmed.data[length] == character) length++;
+
+	*index = end_index;
+
+	if (length == trimmed.len) {
+		if (length == 0) {
+			assert(false && "TODO! all-whitespace");
+		}
+		// all-one-character
+		if (length >= 3) {
+			switch (character) {
+				case '_':
+				case '-':
+				case '*':
+					printf("    NK_THEMATIC_BREAK\n");
+					node->kind = NK_THEMATIC_BREAK;
+					node->value.thematic_break.kind = character;
+					return node;
+			}
+		}
+	}
+
+	assert(false && "TODO!");
+
 	return node;
 }
 
@@ -138,7 +168,7 @@ static document* parse_tree_pass_1(vector(uint32_t) codepoints) {
 	document* pass1 = (document*)malloc(sizeof(document));
 	pass1->nodes = NULL;
 
-	while (index < vector_count(codepoints)) {
+	while (codepoints[index] != 0) {
 		docnode* node = parse_node_pass_1(codepoints, &index);
 		vector_push(pass1->nodes, *node);
 		free(node);

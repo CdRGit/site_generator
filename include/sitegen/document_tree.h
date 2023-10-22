@@ -15,8 +15,13 @@ typedef enum {
 
 typedef struct docnode docnode;
 
+// during construction
+typedef struct {
+	uint32_t* data;
+	size_t  length;
+} docnode_temporary_text;
+
 // leaf blocks
-// 4.1 thematic breaks
 typedef struct {
 	uint32_t kind;
 } docnode_thematic_break;
@@ -24,6 +29,7 @@ typedef struct {
 typedef struct {
 } docnode_trivial;
 
+// others
 typedef struct {
 	int level;
 	vector(docnode) subnodes;
@@ -49,11 +55,6 @@ typedef struct {
 	} decoration;
 	vector(docnode) subnodes;
 } docnode_decoration;
-
-typedef struct {
-	uint32_t* data;
-	size_t  length;
-} docnode_temporary_text;
 
 struct docnode {
 	docnode_kind kind;
