@@ -1,4 +1,4 @@
-# ⋄ ⋄ it's marklessing time
+# ⋄ ⋄ it's marklessing //time// 🂠
 WOOOOOOOOO BABY LETS GO
 paragraph one, paragraph one
 
@@ -16,9 +16,18 @@ paragraph three
 | like, this is an unattributed one
 | lol
 
+here's a paragraph being interrupted by a blockquote body
 | and this one has the header down below
 | which is also good
 ~ Catelyn
+
+| other markless should also be legal
+| # so I can have a quoted header
+| yea
+
+~ Catelyn | and here's a continued blockquote
+| these look slightly funky but are also good
+| yeag
 
 1.ordered listing time
 2.she order on my list until I *incorrect buzzer*
@@ -40,6 +49,8 @@ these are neat
 !set author Catelyn
 !set language English
 
+!
+
 !raw html <main>
 !raw html <article>
 
@@ -55,10 +66,11 @@ Here's an example of a footnote[1], they're pretty cool
 |< left
 >< center
 |> right
+|| justified
 
 there's also **bold** text, //italic// text, __underlined__ text, <-struckthrough-> text, ``inline code``, a -- dash, and a --- longer dash
 v(subtext) and ^(supertext) and URLs https://tech.lgbt/@catgirlQueer !
-also, compound expressions "meow!"(bold, italic, underline, strikethrough), and "hidden"(spoiler), also "big & blue"(blue huge), and "non-url links"(https://itch.io)
+also, compound expressions ''meow!''(bold, italic, underline, strikethrough), and ''hidden''(spoiler), also ''big & blue''(blue huge), and ''non-url links''(https://itch.io)
 
 I can also reference the same footnote[1] again, and add -/- literal newlines
 

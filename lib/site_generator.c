@@ -14,6 +14,11 @@ sitegen_context* sitegen_context_create(void) {
 }
 
 void sitegen_context_destroy(sitegen_context* context) {
+	for (int i = 0; i < vector_count(context->buffers); i++) {
+		free(context->buffers[i].data.data);
+	}
+	vector_free(context->files);
+	vector_free(context->buffers);
 	free(context);
 }
 
@@ -23,7 +28,9 @@ void sitegen_generate(sitegen_context* context) {
 
 		markless_doc* document = parse_markless_document(context, buffer);
 
-		free(document);
+		print_document(document);
+
+		free_document(document);
 	}
 }
 

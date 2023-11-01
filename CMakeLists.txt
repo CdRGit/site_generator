@@ -8,7 +8,7 @@ project(sitegen
 set(C_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_options(-Wall -Werror=return-type -Wshadow -Wconversion -Wno-unused -fsanitize=address -g)
+add_compile_options(-Wpedantic -Wall -Werror -Wshadow -Wconversion -Wno-unused -Wno-infinite-recursion -fsanitize=address -g)
 add_link_options(-fsanitize=address)
 
 add_subdirectory(lib)
