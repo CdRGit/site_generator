@@ -1,0 +1,68 @@
+# it's marklessing time
+WOOOOOOOOO BABY LETS GO
+paragraph one, paragraph one
+
+paragraph two, uwuwuwuwuwuwuwuwuwuwuwu
+
+paragraph three
+  paragraph four
+
+~ Catelyn | there's also block quotes
+
+~ Catelyn
+| these are kinda neat
+| there's a lot of ways to do them
+
+| like, this is an unattributed one
+| lol
+
+| and this one has the header down below
+| which is also good
+~ Catelyn
+
+1.ordered listing time
+2.she order on my list until I *incorrect buzzer*
+  this should be doable with a paragraph
+3.yeag
+
+- testing nested UL
+  - uwu
+  - nya
+- meow
+
+## Subsections work too
+==
+:: , this exists
+there's also codeblocks
+these are neat
+::
+
+!set author Catelyn
+!set language English
+
+!raw html <main>
+!raw html <article>
+
+; comments work too
+;but this is output text
+
+[ image Catelyn.png caption Catelyn! ]
+
+Here's an example of a footnote[1], they're pretty cool
+
+[1] she note on my foot until I meow
+
+|< left
+>< center
+|> right
+
+there's also **bold** text, //italic// text, __underlined__ text, <-struckthrough-> text, ``inline code``, a -- dash, and a --- longer dash
+v(subtext) and ^(supertext) and URLs https://tech.lgbt/@catgirlQueer !
+also, compound expressions "meow!"(bold, italic, underline, strikethrough), and "hidden"(spoiler), also "big & blue"(blue huge), and "non-url links"(https://itch.io)
+
+I can also reference the same footnote[1] again, and add -/- literal newlines
+
+!include include_test.mess
+
+!raw html </article>
+!raw html </main>
