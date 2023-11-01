@@ -13,8 +13,8 @@ add_link_options(-fsanitize=address)
 
 add_subdirectory(lib)
 
-add_executable(sitegen "${PROJECT_SOURCE_DIR}/src/driver.c")
-set_property(TARGET sitegen PROPERTY C_STANDARD 17)
-set_property(TARGET sitegen PROPERTY C_STANDARD_REQUIRED true)
-target_link_libraries(sitegen libsitegen)
-target_include_directories(sitegen PUBLIC "${PROJECT_SOURCE_DIR}/include")
+add_executable(sitegen_driver "${PROJECT_SOURCE_DIR}/src/driver.c")
+set_property(TARGET sitegen_driver PROPERTY C_STANDARD 17)
+set_property(TARGET sitegen_driver PROPERTY C_STANDARD_REQUIRED true)
+target_link_libraries(sitegen_driver sitegen)
+target_include_directories(sitegen_driver PUBLIC "${PROJECT_SOURCE_DIR}/include")

@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "sitegen/site_generator.h"
-#include "sitegen/document_tree.h"
+
+#include "sitegen/markless/parser.h"
+#include "sitegen/markless/document.h"
 
 sitegen_context* sitegen_context_create(void) {
 	sitegen_context* context = calloc(1, sizeof *context);
@@ -17,12 +19,11 @@ void sitegen_context_destroy(sitegen_context* context) {
 
 void sitegen_generate(sitegen_context* context) {
 	for (int i = 0; i < vector_count(context->files); i++) {
-		sitegen_load_buffer(context, context->files[i]);
-		document* tree = parse_document_tree(context->buffers[i]);
+		sourcebuffer buffer = sitegen_load_buffer(context, context->files[i]);
 
+		markless_doc* document = parse_markless_document(context, buffer);
 
-
-		free(tree);
+		free(document);
 	}
 }
 
@@ -58,12 +59,12 @@ static stringview load_stringview_from_file(char* path_cstr) {
 	};
 }
 
-void sitegen_load_buffer(sitegen_context* context, stringview path) {
+sourcebuffer sitegen_load_buffer(sitegen_context* context, stringview path) {
 	sourcebuffer buffer;
 	for (int i = 0; i < vector_count(context->buffers); i++) {
 		buffer = context->buffers[i];
 
-		if (stringview_equal(buffer.path, path)) return; // early out
+		if (stringview_equal(buffer.path, path)) return buffer; // early out
 	}
 
 	char* path_cstr = (char*)malloc(path.len + 1);
@@ -75,4 +76,6 @@ void sitegen_load_buffer(sitegen_context* context, stringview path) {
 	vector_push(context->buffers, buffer);
 
 	free(path_cstr);
+
+	return buffer;
 }

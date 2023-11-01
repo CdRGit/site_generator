@@ -1,0 +1,22 @@
+[from the IRC channel where markless is primarily discussed, on the topic of the actual implementation]
+
+<Colleen> <shinmera> yes this is the place
+<Colleen> <shinmera> give me a minute
+<Colleen> <shinmera> ok, so consider this example:
+<Colleen> <shinmera> | Start
+<Colleen> <shinmera> | Continue
+<Colleen> <shinmera> in this example you have two lines. On the first line the blockquote directive matches and is pushed onto the stack. Then a paragraph matches and is pushed onto the stack. Then nothing else matches so the string "Start" is added to the paragraph component.
+<Colleen> <shinmera> on the second line the stack remains, and now each directive is "invoked": the blockquote directive sees the ``| `` and consumes it. The paragraph directive sees there's no change in indentation, so it too matches. No new directives are matched, so "Continue" is added to the paragraph component
+<Colleen> <shinmera> the invoking of the directives on the stack ensures that spanning line directives and guarded line directives can continue to process text as needed
+<Colleen> <shinmera> In the reference implementation this is done here: https://github.com/Shirakumo/cl-markless/blob/master/parser.lisp#L361
+<Colleen> <shinmera> we traverse the stack upwards, and try to call CONSUME-PREFIX to "invoke" the directive
+<Colleen> <shinmera> If CONSUME-PREFIX fails (returns NIL for NEXT-CURSOR), the stack is unwound to the current point, which causes all directives and associated components to be automatically closed.
+<Colleen> <shinmera> after the stack is processed, it then INVOKEs the top directive
+<Colleen> <shinmera> this INVOKE function then tries to match for new directives, or do whatever else is needed to process the line
+<Colleen> <shinmera> Some directives prevent other directives to match within them, or process text specially, etc.
+<Colleen> <shinmera> So the INVOKE basically means "do whatever the directive that is on top of the stack needs to do"
+<Colleen> <shinmera> For instance the header directive says: The header can only contain inline directives.
+<Colleen> <shinmera> meaning when it is invoked, you should only try to match inline directives
+<Colleen> <shinmera> etc
+<Colleen> <shinmera> does that make sense?
+<Colleen> <shinmera> cate:

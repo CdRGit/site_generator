@@ -23,6 +23,6 @@ void sitegen_context_destroy(sitegen_context* context);
 
 void sitegen_generate(sitegen_context* context);
 
-void sitegen_load_buffer(sitegen_context* context, stringview path);
+sourcebuffer sitegen_load_buffer(sitegen_context* context, stringview path);
 
 #endif//SITEGEN_SITE_GENERATOR_H
