@@ -16,7 +16,7 @@ static void free_nodes(vector(markless_component*) components) {
 }
 
 static void free_node(markless_component* component) {
-	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			free_nodes(component->root->children);
@@ -59,6 +59,7 @@ static void free_node(markless_component* component) {
 			free(component->text);
 		} break;
 		case ML_CT_NEWLINE: {} break;
+		case ML_CT_HORIZONTAL_RULE: {} break;
 		case ML_CT_COUNT:
 			fprintf(stderr, "unreachable\n");
 			exit(1);
@@ -106,7 +107,7 @@ static void print_text(vector(char) text, int depth) {
 }
 
 static void print_node(markless_component* component, int depth) {
-	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			print_string("ROOT\n", depth);
@@ -155,6 +156,9 @@ static void print_node(markless_component* component, int depth) {
 		} break;
 		case ML_CT_NEWLINE: {
 			print_string("<NEWLINE>\n", depth);
+		} break;
+		case ML_CT_HORIZONTAL_RULE: {
+			print_string("<HORIZONTAL_RULE>\n", depth);
 		} break;
 		case ML_CT_COUNT:
 			fprintf(stderr, "unreachable\n");

@@ -69,9 +69,10 @@ struct markless_component {
 		ML_CT_UNORDERED_LIST_ITEM,
 		ML_CT_TEXT,
 		ML_CT_NEWLINE,
+		ML_CT_HORIZONTAL_RULE,
 		ML_CT_COUNT,
 	} type;
-	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive");
 	union {
 		markless_doc*                 root;
 		markless_header*              header;
@@ -84,6 +85,7 @@ struct markless_component {
 		markless_unordered_list_item* unordered_list_item;
 		markless_text*                text;
 		// newline
+		// horizontal_rule
 	};
 };
 

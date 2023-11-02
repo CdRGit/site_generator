@@ -16,6 +16,7 @@ typedef struct {
 		ML_DT_BLOCKQUOTE_HEADER,
 		ML_DT_ORDERED_LIST_ITEM,
 		ML_DT_UNORDERED_LIST_ITEM,
+		ML_DT_HORIZONTAL_RULE,
 		ML_DT_COUNT,
 	} type;
 	union {
@@ -56,7 +57,7 @@ static markless_component* final_component(vector(markless_component)* component
 }
 
 static markless_component* get_last_child(markless_component* component) {
-	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive: get_last_child");
+	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive: get_last_child");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT:
 			return final_component(component->root->children);
@@ -78,6 +79,7 @@ static markless_component* get_last_child(markless_component* component) {
 			return final_component(component->unordered_list_item->children);
 		case ML_CT_TEXT:
 		case ML_CT_NEWLINE:
+		case ML_CT_HORIZONTAL_RULE:
 			fprintf(stderr, "component has no children");
 			exit(1);
 		case ML_CT_COUNT:
@@ -136,7 +138,7 @@ static void add_char_to_char8_vector(vector(char)* vec, uint32_t c) {
 }
 
 static void add_char_to_component(markless_component* component, uint32_t c) {
-	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive: add_char_to_component");
+	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive: add_char_to_component");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT:
 			// NOP
@@ -170,6 +172,9 @@ static void add_char_to_component(markless_component* component, uint32_t c) {
 			return;
 		case ML_CT_NEWLINE:
 			fprintf(stderr, "cannot add character to newline entity");
+			exit(1);
+		case ML_CT_HORIZONTAL_RULE:
+			fprintf(stderr, "cannot add character to horizontal rule");
 			exit(1);
 		case ML_CT_COUNT:
 			fprintf(stderr, "unreachable");
@@ -347,13 +352,14 @@ static size_t consume_whitespace(parser_state* parser) {
 }
 
 static bool match_directive(parser_state* parser, markless_directive directive, size_t* advance_by) {
-	_Static_assert(ML_DT_COUNT == 7, "non-exhaustive: match_directive");
+	_Static_assert(ML_DT_COUNT == 8, "non-exhaustive: match_directive");
 	switch (directive.type) {
 		// always matches, never applicable
 		case ML_DT_ROOT:
 			return true;
 		case ML_DT_HEADER:
 		case ML_DT_BLOCKQUOTE_HEADER:
+		case ML_DT_HORIZONTAL_RULE:
 			// singular line directive, we cannot match on future lines
 			return false;
 		case ML_DT_PARAGRAPH: {
@@ -414,7 +420,7 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 }
 
 static void add_child_component(markless_component* parent, markless_component* child) {
-	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive");
 	switch (parent->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			vector_push(parent->root->children, child);
@@ -482,6 +488,14 @@ static void add_child_component(markless_component* parent, markless_component* 
 		}
 		case ML_CT_NEWLINE: {
 			fprintf(stderr, "Cannot add child to newline entity\n");
+			exit(1);
+		}
+		case ML_CT_HORIZONTAL_RULE: {
+			if (child->type == ML_CT_NEWLINE) {
+				free(child);
+				return; // newlines are skipped
+			}
+			fprintf(stderr, "Cannot add child to horizontal rule\n");
 			exit(1);
 		}
 		case ML_CT_COUNT: {
@@ -673,6 +687,30 @@ inline_only:
 
 			vector_push(parser->stack, entry);
 			return true;
+		} else if (peeked == '=') {
+			// horizontal rule, maybe
+			int count = 1;
+			size_t offset = advance_by;
+			while (peek_char(parser, offset, &advance_by, true) == '=') {
+				count++;
+				offset += advance_by;
+			}
+			if (peek_char(parser, offset, &advance_by, true) != '\n') {
+				return false;
+			}
+			// horizontal rule
+			interrupt_paragraph(parser);
+			entry.directive = (markless_directive){
+				.type  = ML_DT_HORIZONTAL_RULE,
+			};
+
+			parser->cursor += offset;
+
+			entry.component = (markless_component*)malloc(sizeof(markless_component));
+			entry.component->type = ML_CT_HORIZONTAL_RULE;
+
+			vector_push(parser->stack, entry);
+			return true;
 		}
 	}
 	// inline directives
@@ -711,7 +749,7 @@ inline_only:
 }
 
 static void cleanup(parser_state* parser, stack_entry disposing) {
-	_Static_assert(ML_DT_COUNT == 7, "non-exhaustive: cleanup");
+	_Static_assert(ML_DT_COUNT == 8, "non-exhaustive: cleanup");
 	switch (disposing.directive.type) {
 		case ML_DT_ROOT:
 			fprintf(stderr, "WE SHOULD NOT BE DISPOSING ROOT\n");
@@ -719,7 +757,8 @@ static void cleanup(parser_state* parser, stack_entry disposing) {
 		case ML_DT_HEADER:
 		case ML_DT_PARAGRAPH:
 		case ML_DT_BLOCKQUOTE_BODY:
-		case ML_DT_BLOCKQUOTE_HEADER: // trivial
+		case ML_DT_BLOCKQUOTE_HEADER:
+		case ML_DT_HORIZONTAL_RULE: // trivial
 			{
 				size_t idx = (size_t)vector_count(parser->stack) - 2;
 				add_child_component(parser->stack[idx].component, disposing.component);
