@@ -50,11 +50,18 @@ here's a paragraph being interrupted by a blockquote body
 - meow
 
 ## Subsections work too
-==
-:: , this exists
+======================
+:: text, this exists
 there's also codeblocks
 these are neat
 ::
+
+::::: text
+and you can nest them by using more ::'s
+:: text
+here's an example for a codeblock
+::
+:::::
 
 !set author Catelyn
 !set language English

@@ -178,7 +178,7 @@ static void add_char_to_component(markless_component* component, uint32_t c) {
 	assert(false && "TODO!");
 }
 
-static uint32_t peek_char(parser_state* parser, size_t byte_offset, size_t* char_size) {
+static uint32_t peek_char(parser_state* parser, size_t byte_offset, size_t* char_size, bool allow_escapes) {
 	// read in a utf-8 encoded codepoint, as well as transforming ``\r``, ``\r\n`` and ``\n`` into "newlines" (``\n``), and escaping characters with ``\\``
 	// "escaped" characters are the same as their regular codepoint but or-d with 0x80000000 (top bit set)
 	size_t peek_idx = parser->cursor + byte_offset;
@@ -195,7 +195,7 @@ static uint32_t peek_char(parser_state* parser, size_t byte_offset, size_t* char
 		if (header == '\\') {
 			// we do!
 			// let's peek the next one and escape it
-			character = 0x80000000 | peek_char(parser, 1, char_size);
+			character = 0x80000000 | peek_char(parser, 1, char_size, false);
 			if (char_size)
 				(*char_size)++; // go one bigger for the ``\``
 
@@ -274,13 +274,13 @@ static uint32_t peek_char(parser_state* parser, size_t byte_offset, size_t* char
 }
 
 static bool at_end_of_line(parser_state* parser) {
-	uint32_t peeked = peek_char(parser, 0, NULL);
+	uint32_t peeked = peek_char(parser, 0, NULL, true);
 
 	return peeked == '\n';
 }
 
 static bool at_whitespace(parser_state* parser, size_t offset) {
-	uint32_t peeked = peek_char(parser, offset, NULL);
+	uint32_t peeked = peek_char(parser, offset, NULL, true);
 	return (peeked == ' ' || peeked == '\t' || peeked == '\n');
 }
 
@@ -289,7 +289,7 @@ static size_t count_whitespace_limit(parser_state* parser, size_t* offset, size_
 	size_t off = 0;
 	while (depth < limit) {
 		size_t advance_by;
-		uint32_t peeked = peek_char(parser, off, &advance_by);
+		uint32_t peeked = peek_char(parser, off, &advance_by, true);
 		if (peeked == ' ') {
 			off += advance_by;
 			depth++;
@@ -310,7 +310,7 @@ static size_t count_whitespace(parser_state* parser, size_t* offset) {
 	size_t off = 0;
 	while (true) {
 		size_t advance_by;
-		uint32_t peeked = peek_char(parser, off, &advance_by);
+		uint32_t peeked = peek_char(parser, off, &advance_by, true);
 		if (peeked == ' ') {
 			off += advance_by;
 			depth++;
@@ -331,7 +331,7 @@ static size_t consume_whitespace(parser_state* parser) {
 	size_t depth = 0;
 	while (true) {
 		size_t advance_by;
-		uint32_t peeked = peek_char(parser, 0, &advance_by);
+		uint32_t peeked = peek_char(parser, 0, &advance_by, true);
 		if (peeked == ' ') {
 			parser->cursor += advance_by;
 			depth++;
@@ -373,9 +373,9 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 		case ML_DT_BLOCKQUOTE_BODY: {
 			size_t offset;
 			size_t length = 0;
-			uint32_t bar   = peek_char(parser, 0, &offset);
+			uint32_t bar   = peek_char(parser, 0, &offset, true);
 			length += offset;
-			uint32_t space = peek_char(parser, length, &offset);
+			uint32_t space = peek_char(parser, length, &offset, true);
 			offset += length;
 			if (bar != '|' || space != ' ') {
 				return false;
@@ -504,6 +504,7 @@ static void interrupt_directive(parser_state* parser, int type) {
 }
 
 static void interrupt_paragraph(parser_state* parser) {
+	parser->allow_paragraph = true;
 	interrupt_directive(parser, ML_DT_PARAGRAPH);
 }
 
@@ -514,7 +515,7 @@ static bool digit(uint32_t c) {
 static bool invoke(parser_state* parser) {
 	stack_entry entry;
 	size_t advance_by;
-	uint32_t peeked = peek_char(parser, 0, &advance_by);
+	uint32_t peeked = peek_char(parser, 0, &advance_by, true);
 
 	// let's try a bunch of directives!
 
@@ -522,7 +523,7 @@ static bool invoke(parser_state* parser) {
 	if (parser->blockquote_body_special_case || !parser->inline_only) {
 		if (peeked == '|') {
 			size_t offset = advance_by;
-			uint32_t next = peek_char(parser, offset, &advance_by);
+			uint32_t next = peek_char(parser, offset, &advance_by, true);
 			offset += advance_by;
 			if (next == ' ') {
 				entry.directive = (markless_directive){
@@ -559,7 +560,7 @@ inline_only:
 			int value = 0;
 			uint32_t next;
 			int depth = 0;
-			for (next = peeked; digit(next); next = peek_char(parser, offset, &advance_by)) {
+			for (next = peeked; digit(next); next = peek_char(parser, offset, &advance_by, true)) {
 				value *= 10;
 				value += (int)next - '0';
 				offset += advance_by;
@@ -574,7 +575,6 @@ inline_only:
 				};
 				// ordered list
 				interrupt_paragraph(parser);
-				parser->allow_paragraph = true;
 				parser->cursor += offset;
 
 				markless_ordered_list_item* list_item = (markless_ordered_list_item*)malloc(sizeof(markless_ordered_list_item));
@@ -594,7 +594,7 @@ inline_only:
 		} else if (peeked == '-') {
 			size_t offset = advance_by;
 			int value = 0;
-			uint32_t next = peek_char(parser, offset, &advance_by);
+			uint32_t next = peek_char(parser, offset, &advance_by, true);
 			if (next == ' ') {
 				offset += advance_by;
 				entry.directive = (markless_directive){
@@ -602,7 +602,6 @@ inline_only:
 				};
 				// unordered list
 				interrupt_paragraph(parser);
-				parser->allow_paragraph = true;
 				parser->cursor += offset;
 
 				markless_unordered_list_item* list_item = (markless_unordered_list_item*)malloc(sizeof(markless_unordered_list_item));
@@ -620,7 +619,7 @@ inline_only:
 			}
 		} else if (peeked == '~') {
 			size_t offset = advance_by;
-			uint32_t next = peek_char(parser, offset, &advance_by);
+			uint32_t next = peek_char(parser, offset, &advance_by, true);
 			offset += advance_by;
 			if (next == ' ') {
 				entry.directive = (markless_directive){
@@ -646,11 +645,11 @@ inline_only:
 			// it's headering time?
 			int level = 1;
 			size_t offset = advance_by;
-			while (peek_char(parser, offset, &advance_by) == '#') {
+			while (peek_char(parser, offset, &advance_by, true) == '#') {
 				level++;
 				offset += advance_by;
 			}
-			if (peek_char(parser, offset, &advance_by) != ' ') {
+			if (peek_char(parser, offset, &advance_by, true) != ' ') {
 				return false;
 			}
 			offset += advance_by;
@@ -828,7 +827,7 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 			if (!invoke(parser)) {
 				parser->inline_only = true; // we passed the start of the line
 				size_t advance_by;
-				uint32_t c = peek_char(parser, 0, &advance_by);
+				uint32_t c = peek_char(parser, 0, &advance_by, true);
 				if (c == 0) goto end;
 				if (c != ('\n' | 0x80000000)) {
 					add_char_to_component(parser->stack[vector_count(parser->stack) - 1].component, c);
@@ -837,7 +836,7 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 			}
 		}
 		size_t advance_by;
-		uint32_t c = peek_char(parser, 0, &advance_by);
+		uint32_t c = peek_char(parser, 0, &advance_by, true);
 		if (c == '\n') {
 			// handle newline stuff here
 			if (parser->linebreak_mode == LB_MODE_SHOW && vector_count(parser->stack) > 1) {
