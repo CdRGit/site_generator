@@ -15,6 +15,7 @@ typedef struct {
 		ML_DT_BLOCKQUOTE_BODY,
 		ML_DT_BLOCKQUOTE_HEADER,
 		ML_DT_ORDERED_LIST_ITEM,
+		ML_DT_UNORDERED_LIST_ITEM,
 		ML_DT_COUNT,
 	} type;
 	union {
@@ -36,7 +37,11 @@ typedef struct {
 	bool allow_paragraph;
 	bool inline_only;
 	bool blockquote_body_special_case;
-	bool must_match_new_list_item_or_list_ends;
+	enum {
+		LI_NONE,
+		LI_ORDERED,
+		LI_UNORDERED
+	} must_match_new_list_item_or_list_ends;
 	size_t cursor;
 	vector(stack_entry) stack;
 	vector(stringview) disabled_directives;
@@ -45,23 +50,32 @@ typedef struct {
 	// uhhhhh no labels for now fuck u
 } parser_state;
 
+static markless_component* final_component(vector(markless_component)* components) {
+	if (vector_count(components) == 0) return NULL;
+	return *vector_back(components);
+}
+
 static markless_component* get_last_child(markless_component* component) {
-	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive: get_last_child");
+	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive: get_last_child");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT:
-			return *vector_back(component->root->children);
+			return final_component(component->root->children);
 		case ML_CT_HEADER:
-			return *vector_back(component->header->children);
+			return final_component(component->header->children);
 		case ML_CT_PARAGRAPH:
-			return *vector_back(component->paragraph->children);
+			return final_component(component->paragraph->children);
 		case ML_CT_BLOCKQUOTE_BODY:
-			return *vector_back(component->blockquote_body->children);
+			return final_component(component->blockquote_body->children);
 		case ML_CT_BLOCKQUOTE_HEADER:
-			return *vector_back(component->blockquote_header->children);
+			return final_component(component->blockquote_header->children);
 		case ML_CT_ORDERED_LIST:
-			return *vector_back(component->ordered_list->items);
+			return final_component(component->ordered_list->items);
 		case ML_CT_ORDERED_LIST_ITEM:
-			return *vector_back(component->ordered_list_item->children);
+			return final_component(component->ordered_list_item->children);
+		case ML_CT_UNORDERED_LIST:
+			return final_component(component->unordered_list->items);
+		case ML_CT_UNORDERED_LIST_ITEM:
+			return final_component(component->unordered_list_item->children);
 		case ML_CT_TEXT:
 		case ML_CT_NEWLINE:
 			fprintf(stderr, "component has no children");
@@ -122,7 +136,7 @@ static void add_char_to_char8_vector(vector(char)* vec, uint32_t c) {
 }
 
 static void add_char_to_component(markless_component* component, uint32_t c) {
-	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive: add_char_to_component");
+	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive: add_char_to_component");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT:
 			// NOP
@@ -144,6 +158,12 @@ static void add_char_to_component(markless_component* component, uint32_t c) {
 			return;
 		case ML_CT_ORDERED_LIST_ITEM:
 			add_char_to_component(get_or_add_text_child(&component->ordered_list_item->children), c);
+			return;
+		case ML_CT_UNORDERED_LIST:
+			// NOP
+			return;
+		case ML_CT_UNORDERED_LIST_ITEM:
+			add_char_to_component(get_or_add_text_child(&component->unordered_list_item->children), c);
 			return;
 		case ML_CT_TEXT:
 			add_char_to_char8_vector(&component->text->text, c);
@@ -327,7 +347,7 @@ static size_t consume_whitespace(parser_state* parser) {
 }
 
 static bool match_directive(parser_state* parser, markless_directive directive, size_t* advance_by) {
-	_Static_assert(ML_DT_COUNT == 6, "non-exhaustive: match_directive");
+	_Static_assert(ML_DT_COUNT == 7, "non-exhaustive: match_directive");
 	switch (directive.type) {
 		// always matches, never applicable
 		case ML_DT_ROOT:
@@ -368,7 +388,18 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 			size_t offset;
 			size_t depth = count_whitespace_limit(parser, &offset, directive.depth);
 			if (depth != directive.depth) {
-				parser->must_match_new_list_item_or_list_ends = true;
+				parser->must_match_new_list_item_or_list_ends = LI_ORDERED;
+				return false;
+			}
+			if (advance_by)
+				*advance_by = offset;
+			return true;
+		}
+		case ML_DT_UNORDERED_LIST_ITEM: {
+			size_t offset;
+			size_t depth = count_whitespace_limit(parser, &offset, 2);
+			if (depth != 2) {
+				parser->must_match_new_list_item_or_list_ends = LI_UNORDERED;
 				return false;
 			}
 			if (advance_by)
@@ -383,7 +414,7 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 }
 
 static void add_child_component(markless_component* parent, markless_component* child) {
-	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 11, "non-exhaustive");
 	switch (parent->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			vector_push(parent->root->children, child);
@@ -422,7 +453,27 @@ static void add_child_component(markless_component* parent, markless_component* 
 			return;
 		}
 		case ML_CT_ORDERED_LIST_ITEM: {
-			vector_push(parent->blockquote_body->children, child);
+			if (child->type == ML_CT_NEWLINE) {
+				free(child);
+				return; // newlines are skipped
+			}
+			vector_push(parent->ordered_list_item->children, child);
+			return;
+		}
+		case ML_CT_UNORDERED_LIST: {
+			if (child->type != ML_CT_UNORDERED_LIST_ITEM) {
+				fprintf(stderr, "Cannot add non-unordered list item to ordered list\n");
+				exit(1);
+			}
+			vector_push(parent->unordered_list->items, child);
+			return;
+		}
+		case ML_CT_UNORDERED_LIST_ITEM: {
+			if (child->type == ML_CT_NEWLINE) {
+				free(child);
+				return; // newlines are skipped
+			}
+			vector_push(parent->unordered_list_item->children, child);
 			return;
 		}
 		case ML_CT_TEXT: {
@@ -523,6 +574,7 @@ inline_only:
 				};
 				// ordered list
 				interrupt_paragraph(parser);
+				parser->allow_paragraph = true;
 				parser->cursor += offset;
 
 				markless_ordered_list_item* list_item = (markless_ordered_list_item*)malloc(sizeof(markless_ordered_list_item));
@@ -534,7 +586,36 @@ inline_only:
 				entry.component->ordered_list_item = list_item;
 
 				vector_push(parser->stack, entry);
-				parser->must_match_new_list_item_or_list_ends = false;
+				if (parser->must_match_new_list_item_or_list_ends == LI_ORDERED) {
+					parser->must_match_new_list_item_or_list_ends = LI_NONE;
+				}
+				return true;
+			}
+		} else if (peeked == '-') {
+			size_t offset = advance_by;
+			int value = 0;
+			uint32_t next = peek_char(parser, offset, &advance_by);
+			if (next == ' ') {
+				offset += advance_by;
+				entry.directive = (markless_directive){
+					.type = ML_DT_UNORDERED_LIST_ITEM,
+				};
+				// unordered list
+				interrupt_paragraph(parser);
+				parser->allow_paragraph = true;
+				parser->cursor += offset;
+
+				markless_unordered_list_item* list_item = (markless_unordered_list_item*)malloc(sizeof(markless_unordered_list_item));
+				memset(list_item, 0, sizeof(markless_unordered_list_item));
+
+				entry.component = (markless_component*)malloc(sizeof(markless_component));
+				entry.component->type = ML_CT_UNORDERED_LIST_ITEM;
+				entry.component->unordered_list_item = list_item;
+
+				vector_push(parser->stack, entry);
+				if (parser->must_match_new_list_item_or_list_ends == LI_UNORDERED) {
+					parser->must_match_new_list_item_or_list_ends = LI_NONE;
+				}
 				return true;
 			}
 		} else if (peeked == '~') {
@@ -631,7 +712,7 @@ inline_only:
 }
 
 static void cleanup(parser_state* parser, stack_entry disposing) {
-	_Static_assert(ML_DT_COUNT == 6, "non-exhaustive: cleanup");
+	_Static_assert(ML_DT_COUNT == 7, "non-exhaustive: cleanup");
 	switch (disposing.directive.type) {
 		case ML_DT_ROOT:
 			fprintf(stderr, "WE SHOULD NOT BE DISPOSING ROOT\n");
@@ -650,7 +731,7 @@ static void cleanup(parser_state* parser, stack_entry disposing) {
 				size_t idx = (size_t)vector_count(parser->stack) - 2;
 				markless_component* parent = parser->stack[idx].component;
 				markless_component* last_child = get_last_child(parent);
-				if (last_child->type == ML_CT_ORDERED_LIST && last_child->ordered_list->active) {
+				if (last_child && last_child->type == ML_CT_ORDERED_LIST && last_child->ordered_list->active) {
 					add_child_component(last_child, disposing.component);
 				} else {
 					markless_ordered_list* ol = (markless_ordered_list*)malloc(sizeof(markless_ordered_list));
@@ -660,6 +741,26 @@ static void cleanup(parser_state* parser, stack_entry disposing) {
 					markless_component* component = (markless_component*)malloc(sizeof(markless_component));
 					component->type = ML_CT_ORDERED_LIST;
 					component->ordered_list = ol;
+					add_child_component(parent, component);
+					add_child_component(component, disposing.component);
+				}
+			}
+			return;
+		case ML_DT_UNORDERED_LIST_ITEM:
+			{
+				size_t idx = (size_t)vector_count(parser->stack) - 2;
+				markless_component* parent = parser->stack[idx].component;
+				markless_component* last_child = get_last_child(parent);
+				if (last_child && last_child->type == ML_CT_UNORDERED_LIST && last_child->unordered_list->active) {
+					add_child_component(last_child, disposing.component);
+				} else {
+					markless_unordered_list* ul = (markless_unordered_list*)malloc(sizeof(markless_unordered_list));
+					memset(ul, 0, sizeof(markless_unordered_list));
+					ul->active = true;
+
+					markless_component* component = (markless_component*)malloc(sizeof(markless_component));
+					component->type = ML_CT_UNORDERED_LIST;
+					component->unordered_list = ul;
 					add_child_component(parent, component);
 					add_child_component(component, disposing.component);
 				}
@@ -708,7 +809,7 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 		parser->allow_paragraph = true;
 		parser->inline_only = false;
 		parser->blockquote_body_special_case = false;
-		parser->must_match_new_list_item_or_list_ends = false;
+		parser->must_match_new_list_item_or_list_ends = LI_NONE;
 		for (current_entry = 0; current_entry < vector_count(parser->stack); current_entry++) {
 			size_t advance_by = 0;
 			if (match_directive(parser, parser->stack[current_entry].directive, &advance_by)) {
@@ -746,11 +847,18 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 			}
 			parser->cursor += advance_by;
 		}
-		if (parser->must_match_new_list_item_or_list_ends) {
+		if (parser->must_match_new_list_item_or_list_ends == LI_ORDERED) {
 			markless_component* parent = vector_back(parser->stack)->component;
 			markless_component* last_child = get_last_child(parent);
 			if (last_child->type == ML_CT_ORDERED_LIST && last_child->ordered_list->active) {
 				last_child->ordered_list->active = false;
+			}
+		}
+		else if (parser->must_match_new_list_item_or_list_ends == LI_UNORDERED) {
+			markless_component* parent = vector_back(parser->stack)->component;
+			markless_component* last_child = get_last_child(parent);
+			if (last_child->type == ML_CT_UNORDERED_LIST && last_child->unordered_list->active) {
+				last_child->unordered_list->active = false;
 			}
 		}
 		//printf("\n");
