@@ -34,6 +34,16 @@ typedef struct {
 } markless_blockquote_header;
 
 typedef struct {
+	vector(markless_component*) children;
+	int number;
+} markless_ordered_list_item;
+
+typedef struct {
+	vector(markless_component*) items;
+	bool active;
+} markless_ordered_list;
+
+typedef struct {
 	vector(char) text;
 } markless_text;
 
@@ -44,17 +54,21 @@ struct markless_component {
 		ML_CT_PARAGRAPH,
 		ML_CT_BLOCKQUOTE_BODY,
 		ML_CT_BLOCKQUOTE_HEADER,
+		ML_CT_ORDERED_LIST,
+		ML_CT_ORDERED_LIST_ITEM,
 		ML_CT_TEXT,
 		ML_CT_NEWLINE,
 		ML_CT_COUNT,
 	} type;
-	_Static_assert(ML_CT_COUNT == 7, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive");
 	union {
 		markless_doc*               root;
 		markless_header*            header;
 		markless_paragraph*         paragraph;
 		markless_blockquote_body*   blockquote_body;
 		markless_blockquote_header* blockquote_header;
+		markless_ordered_list*      ordered_list;
+		markless_ordered_list_item* ordered_list_item;
 		markless_text*              text;
 		// newline
 	};

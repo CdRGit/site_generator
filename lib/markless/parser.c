@@ -14,6 +14,7 @@ typedef struct {
 		ML_DT_PARAGRAPH,
 		ML_DT_BLOCKQUOTE_BODY,
 		ML_DT_BLOCKQUOTE_HEADER,
+		ML_DT_ORDERED_LIST_ITEM,
 		ML_DT_COUNT,
 	} type;
 	union {
@@ -35,6 +36,7 @@ typedef struct {
 	bool allow_paragraph;
 	bool inline_only;
 	bool blockquote_body_special_case;
+	bool must_match_new_list_item_or_list_ends;
 	size_t cursor;
 	vector(stack_entry) stack;
 	vector(stringview) disabled_directives;
@@ -42,6 +44,35 @@ typedef struct {
 	// **fuck**
 	// uhhhhh no labels for now fuck u
 } parser_state;
+
+static markless_component* get_last_child(markless_component* component) {
+	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive: get_last_child");
+	switch (component->type) {
+		case ML_CT_ROOT_DOCUMENT:
+			return *vector_back(component->root->children);
+		case ML_CT_HEADER:
+			return *vector_back(component->header->children);
+		case ML_CT_PARAGRAPH:
+			return *vector_back(component->paragraph->children);
+		case ML_CT_BLOCKQUOTE_BODY:
+			return *vector_back(component->blockquote_body->children);
+		case ML_CT_BLOCKQUOTE_HEADER:
+			return *vector_back(component->blockquote_header->children);
+		case ML_CT_ORDERED_LIST:
+			return *vector_back(component->ordered_list->items);
+		case ML_CT_ORDERED_LIST_ITEM:
+			return *vector_back(component->ordered_list_item->children);
+		case ML_CT_TEXT:
+		case ML_CT_NEWLINE:
+			fprintf(stderr, "component has no children");
+			exit(1);
+		case ML_CT_COUNT:
+			fprintf(stderr, "unreachable");
+			exit(1);
+	}
+	assert(false && "TODO!");
+	return NULL;
+}
 
 static markless_component* get_or_add_text_child(vector(markless_component*)* children) {
 	if (*children && vector_count(*children) > 0) {
@@ -91,10 +122,10 @@ static void add_char_to_char8_vector(vector(char)* vec, uint32_t c) {
 }
 
 static void add_char_to_component(markless_component* component, uint32_t c) {
-	_Static_assert(ML_CT_COUNT == 7, "non-exhaustive: add_char_to_component");
+	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive: add_char_to_component");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT:
-			assert(false && "TODO! ROOT");
+			// NOP
 			return;
 		case ML_CT_HEADER:
 			add_char_to_component(get_or_add_text_child(&component->header->children), c);
@@ -108,13 +139,18 @@ static void add_char_to_component(markless_component* component, uint32_t c) {
 		case ML_CT_BLOCKQUOTE_HEADER:
 			add_char_to_component(get_or_add_text_child(&component->blockquote_header->children), c);
 			return;
+		case ML_CT_ORDERED_LIST:
+			// NOP
+			return;
+		case ML_CT_ORDERED_LIST_ITEM:
+			add_char_to_component(get_or_add_text_child(&component->ordered_list_item->children), c);
+			return;
 		case ML_CT_TEXT:
 			add_char_to_char8_vector(&component->text->text, c);
 			return;
 		case ML_CT_NEWLINE:
 			fprintf(stderr, "cannot add character to newline entity");
 			exit(1);
-			return;
 		case ML_CT_COUNT:
 			fprintf(stderr, "unreachable");
 			exit(1);
@@ -228,6 +264,27 @@ static bool at_whitespace(parser_state* parser, size_t offset) {
 	return (peeked == ' ' || peeked == '\t' || peeked == '\n');
 }
 
+static size_t count_whitespace_limit(parser_state* parser, size_t* offset, size_t limit) {
+	size_t depth = 0;
+	size_t off = 0;
+	while (depth < limit) {
+		size_t advance_by;
+		uint32_t peeked = peek_char(parser, off, &advance_by);
+		if (peeked == ' ') {
+			off += advance_by;
+			depth++;
+			continue;
+		} else if (peeked == '\t') {
+			off += advance_by;
+			depth += 4 - (depth % 4);
+			continue;
+		}
+		break;
+	}
+	if (offset)
+		*offset = off;
+	return depth;
+}
 static size_t count_whitespace(parser_state* parser, size_t* offset) {
 	size_t depth = 0;
 	size_t off = 0;
@@ -270,7 +327,7 @@ static size_t consume_whitespace(parser_state* parser) {
 }
 
 static bool match_directive(parser_state* parser, markless_directive directive, size_t* advance_by) {
-	_Static_assert(ML_DT_COUNT == 5, "non-exhaustive: match_directive");
+	_Static_assert(ML_DT_COUNT == 6, "non-exhaustive: match_directive");
 	switch (directive.type) {
 		// always matches, never applicable
 		case ML_DT_ROOT:
@@ -307,6 +364,17 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 				*advance_by = offset;
 			return true;
 		}
+		case ML_DT_ORDERED_LIST_ITEM: {
+			size_t offset;
+			size_t depth = count_whitespace_limit(parser, &offset, directive.depth);
+			if (depth != directive.depth) {
+				parser->must_match_new_list_item_or_list_ends = true;
+				return false;
+			}
+			if (advance_by)
+				*advance_by = offset;
+			return true;
+		}
 		case ML_DT_COUNT:
 			fprintf(stderr, "unreachable\n");
 			exit(1);
@@ -315,11 +383,7 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 }
 
 static void add_child_component(markless_component* parent, markless_component* child) {
-	if (child->type == ML_CT_BLOCKQUOTE_HEADER) {
-		printf("%.*s\n", (int)vector_count(child->blockquote_header->children[0]->text->text), child->blockquote_header->children[0]->text->text);
-	}
-
-	_Static_assert(ML_CT_COUNT == 7, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive");
 	switch (parent->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			vector_push(parent->root->children, child);
@@ -347,6 +411,18 @@ static void add_child_component(markless_component* parent, markless_component* 
 				return; // newlines are skipped
 			}
 			vector_push(parent->blockquote_header->children, child);
+			return;
+		}
+		case ML_CT_ORDERED_LIST: {
+			if (child->type != ML_CT_ORDERED_LIST_ITEM) {
+				fprintf(stderr, "Cannot add non-ordered list item to ordered list\n");
+				exit(1);
+			}
+			vector_push(parent->ordered_list->items, child);
+			return;
+		}
+		case ML_CT_ORDERED_LIST_ITEM: {
+			vector_push(parent->blockquote_body->children, child);
 			return;
 		}
 		case ML_CT_TEXT: {
@@ -378,6 +454,10 @@ static void interrupt_directive(parser_state* parser, int type) {
 
 static void interrupt_paragraph(parser_state* parser) {
 	interrupt_directive(parser, ML_DT_PARAGRAPH);
+}
+
+static bool digit(uint32_t c) {
+	return c >= '0' && c <= '9';
 }
 
 static bool invoke(parser_state* parser) {
@@ -423,7 +503,41 @@ static bool invoke(parser_state* parser) {
 	}
 inline_only:
 	if (!parser->inline_only) {
-		if (peeked == '~') {
+		if (digit(peeked)) {
+			size_t offset = 0;
+			int value = 0;
+			uint32_t next;
+			int depth = 0;
+			for (next = peeked; digit(next); next = peek_char(parser, offset, &advance_by)) {
+				value *= 10;
+				value += (int)next - '0';
+				offset += advance_by;
+				depth++;
+			}
+			if (next == '.') {
+				offset += advance_by;
+				depth++;
+				entry.directive = (markless_directive){
+					.type = ML_DT_ORDERED_LIST_ITEM,
+					.depth = (size_t)depth,
+				};
+				// ordered list
+				interrupt_paragraph(parser);
+				parser->cursor += offset;
+
+				markless_ordered_list_item* list_item = (markless_ordered_list_item*)malloc(sizeof(markless_ordered_list_item));
+				memset(list_item, 0, sizeof(markless_ordered_list_item));
+				list_item->number = value;
+
+				entry.component = (markless_component*)malloc(sizeof(markless_component));
+				entry.component->type = ML_CT_ORDERED_LIST_ITEM;
+				entry.component->ordered_list_item = list_item;
+
+				vector_push(parser->stack, entry);
+				parser->must_match_new_list_item_or_list_ends = false;
+				return true;
+			}
+		} else if (peeked == '~') {
 			size_t offset = advance_by;
 			uint32_t next = peek_char(parser, offset, &advance_by);
 			offset += advance_by;
@@ -517,7 +631,7 @@ inline_only:
 }
 
 static void cleanup(parser_state* parser, stack_entry disposing) {
-	_Static_assert(ML_DT_COUNT == 5, "non-exhaustive: cleanup");
+	_Static_assert(ML_DT_COUNT == 6, "non-exhaustive: cleanup");
 	switch (disposing.directive.type) {
 		case ML_DT_ROOT:
 			fprintf(stderr, "WE SHOULD NOT BE DISPOSING ROOT\n");
@@ -529,6 +643,26 @@ static void cleanup(parser_state* parser, stack_entry disposing) {
 			{
 				size_t idx = (size_t)vector_count(parser->stack) - 2;
 				add_child_component(parser->stack[idx].component, disposing.component);
+			}
+			return;
+		case ML_DT_ORDERED_LIST_ITEM:
+			{
+				size_t idx = (size_t)vector_count(parser->stack) - 2;
+				markless_component* parent = parser->stack[idx].component;
+				markless_component* last_child = get_last_child(parent);
+				if (last_child->type == ML_CT_ORDERED_LIST && last_child->ordered_list->active) {
+					add_child_component(last_child, disposing.component);
+				} else {
+					markless_ordered_list* ol = (markless_ordered_list*)malloc(sizeof(markless_ordered_list));
+					memset(ol, 0, sizeof(markless_ordered_list));
+					ol->active = true;
+
+					markless_component* component = (markless_component*)malloc(sizeof(markless_component));
+					component->type = ML_CT_ORDERED_LIST;
+					component->ordered_list = ol;
+					add_child_component(parent, component);
+					add_child_component(component, disposing.component);
+				}
 			}
 			return;
 		case ML_DT_COUNT:
@@ -554,7 +688,7 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 	memset(parser,   0, sizeof(parser_state));
 
 	parser->source = source;
-	parser->linebreak_mode;
+	parser->linebreak_mode = LB_MODE_SHOW;
 
 	markless_component root_component;
 	root_component.type = ML_CT_ROOT_DOCUMENT;
@@ -574,6 +708,7 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 		parser->allow_paragraph = true;
 		parser->inline_only = false;
 		parser->blockquote_body_special_case = false;
+		parser->must_match_new_list_item_or_list_ends = false;
 		for (current_entry = 0; current_entry < vector_count(parser->stack); current_entry++) {
 			size_t advance_by = 0;
 			if (match_directive(parser, parser->stack[current_entry].directive, &advance_by)) {
@@ -594,8 +729,9 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 				size_t advance_by;
 				uint32_t c = peek_char(parser, 0, &advance_by);
 				if (c == 0) goto end;
-				//printf("%lc", c & 0x7FFFFFFF);
-				add_char_to_component(parser->stack[vector_count(parser->stack) - 1].component, c);
+				if (c != ('\n' | 0x80000000)) {
+					add_char_to_component(parser->stack[vector_count(parser->stack) - 1].component, c);
+				}
 				parser->cursor += advance_by;
 			}
 		}
@@ -609,6 +745,13 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 				add_child_component(parser->stack[vector_count(parser->stack) - 1].component, component);
 			}
 			parser->cursor += advance_by;
+		}
+		if (parser->must_match_new_list_item_or_list_ends) {
+			markless_component* parent = vector_back(parser->stack)->component;
+			markless_component* last_child = get_last_child(parent);
+			if (last_child->type == ML_CT_ORDERED_LIST && last_child->ordered_list->active) {
+				last_child->ordered_list->active = false;
+			}
 		}
 		//printf("\n");
 

@@ -29,13 +29,23 @@ here's a paragraph being interrupted by a blockquote body
 | these look slightly funky but are also good
 | yeag
 
+500 not an ordered list
+
 1.ordered listing time
-2.she order on my list until I *incorrect buzzer*
+2.she order on my list until I **incorrect buzzer**
   this should be doable with a paragraph
 3.yeag
+4. nesting too
+  1. like this
+  2. uwu
+    
+  3. this shouldn't even interrupt it
+
+1. but this should
 
 - testing nested UL
   - uwu
+  
   - nya
 - meow
 
@@ -67,6 +77,9 @@ Here's an example of a footnote[1], they're pretty cool
 >< center
 |> right
 || justified
+
+I can escape \
+a newline and it **shouldn't** appear in the output
 
 there's also **bold** text, //italic// text, __underlined__ text, <-struckthrough-> text, ``inline code``, a -- dash, and a --- longer dash
 v(subtext) and ^(supertext) and URLs https://tech.lgbt/@catgirlQueer !

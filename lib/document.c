@@ -16,7 +16,7 @@ static void free_nodes(vector(markless_component*) components) {
 }
 
 static void free_node(markless_component* component) {
-	_Static_assert(ML_CT_COUNT == 7, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			free_nodes(component->root->children);
@@ -37,6 +37,14 @@ static void free_node(markless_component* component) {
 		case ML_CT_BLOCKQUOTE_HEADER: {
 			free_nodes(component->blockquote_header->children);
 			free(component->blockquote_header);
+		} break;
+		case ML_CT_ORDERED_LIST: {
+			free_nodes(component->ordered_list->items);
+			free(component->ordered_list);
+		} break;
+		case ML_CT_ORDERED_LIST_ITEM: {
+			free_nodes(component->ordered_list_item->children);
+			free(component->ordered_list_item);
 		} break;
 		case ML_CT_TEXT: {
 			vector_free(component->text->text);
@@ -90,7 +98,7 @@ static void print_text(vector(char) text, int depth) {
 }
 
 static void print_node(markless_component* component, int depth) {
-	_Static_assert(ML_CT_COUNT == 7, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 9, "non-exhaustive");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			print_string("ROOT\n", depth);
@@ -113,6 +121,16 @@ static void print_node(markless_component* component, int depth) {
 		case ML_CT_BLOCKQUOTE_HEADER: {
 			print_string("BLOCKQUOTE(HEADER)\n", depth);
 			print_nodes(component->blockquote_header->children, depth+1);
+		} break;
+		case ML_CT_ORDERED_LIST: {
+			print_string("ORDERED_LIST\n", depth);
+			print_nodes(component->ordered_list->items, depth+1);
+		} break;
+		case ML_CT_ORDERED_LIST_ITEM: {
+			print_string("ORDERED_LIST_ITEM(", depth);
+			printf("%d)", component->ordered_list_item->number);
+			print_string("\n", depth);
+			print_nodes(component->ordered_list_item->children, depth+1);
 		} break;
 		case ML_CT_TEXT: {
 			print_string("TEXT\n", depth);
