@@ -63,13 +63,23 @@ here's an example for a codeblock
 ::
 :::::
 
-!set author Catelyn
-!set language English
+:: text
+::: text
+or by using less!!
+:::
+::
+
+- :: text
+    offset\
+  ::
+
+! set author Catelyn
+! set language English
 
 !
 
-!raw html <main>
-!raw html <article>
+! raw html <main>
+! raw html <article>
 
 ; comments work too
 ;but this is output text
@@ -94,7 +104,7 @@ also, compound expressions ''meow!''(bold, italic, underline, strikethrough), an
 
 I can also reference the same footnote[1] again, and add -/- literal newlines
 
-!include include_test.mess
+! include include_test.mess
 
-!raw html </article>
-!raw html </main>
+! raw html </article>
+! raw html </main>
