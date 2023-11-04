@@ -17,6 +17,7 @@ typedef struct {
 		ML_DT_ORDERED_LIST_ITEM,
 		ML_DT_UNORDERED_LIST_ITEM,
 		ML_DT_HORIZONTAL_RULE,
+		ML_DT_CODEBLOCK,
 		ML_DT_COUNT,
 	} type;
 	union {
@@ -37,6 +38,7 @@ typedef struct {
 	} linebreak_mode;
 	bool allow_paragraph;
 	bool inline_only;
+	bool skip_parsing;
 	bool blockquote_body_special_case;
 	enum {
 		LI_NONE,
@@ -57,7 +59,7 @@ static markless_component* final_component(vector(markless_component)* component
 }
 
 static markless_component* get_last_child(markless_component* component) {
-	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive: get_last_child");
+	_Static_assert(ML_CT_COUNT == 13, "non-exhaustive: get_last_child");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT:
 			return final_component(component->root->children);
@@ -77,6 +79,7 @@ static markless_component* get_last_child(markless_component* component) {
 			return final_component(component->unordered_list->items);
 		case ML_CT_UNORDERED_LIST_ITEM:
 			return final_component(component->unordered_list_item->children);
+		case ML_CT_CODEBLOCK:
 		case ML_CT_TEXT:
 		case ML_CT_NEWLINE:
 		case ML_CT_HORIZONTAL_RULE:
@@ -138,7 +141,7 @@ static void add_char_to_char8_vector(vector(char)* vec, uint32_t c) {
 }
 
 static void add_char_to_component(markless_component* component, uint32_t c) {
-	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive: add_char_to_component");
+	_Static_assert(ML_CT_COUNT == 13, "non-exhaustive: add_char_to_component");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT:
 			// NOP
@@ -166,6 +169,9 @@ static void add_char_to_component(markless_component* component, uint32_t c) {
 			return;
 		case ML_CT_UNORDERED_LIST_ITEM:
 			add_char_to_component(get_or_add_text_child(&component->unordered_list_item->children), c);
+			return;
+		case ML_CT_CODEBLOCK:
+			add_char_to_char8_vector(&component->codeblock->text, c);
 			return;
 		case ML_CT_TEXT:
 			add_char_to_char8_vector(&component->text->text, c);
@@ -197,7 +203,7 @@ static uint32_t peek_char(parser_state* parser, size_t byte_offset, size_t* char
 	if ((header & 0x80) == 0x00) {
 		// ascii, yippee!
 		// do we have a backslash?
-		if (header == '\\') {
+		if (header == '\\' && allow_escapes) {
 			// we do!
 			// let's peek the next one and escape it
 			character = 0x80000000 | peek_char(parser, 1, char_size, false);
@@ -351,9 +357,9 @@ static size_t consume_whitespace(parser_state* parser) {
 	return depth;
 }
 
-static bool match_directive(parser_state* parser, markless_directive directive, size_t* advance_by) {
-	_Static_assert(ML_DT_COUNT == 8, "non-exhaustive: match_directive");
-	switch (directive.type) {
+static bool match_directive(parser_state* parser, stack_entry entry, size_t* advance_by) {
+	_Static_assert(ML_DT_COUNT == 9, "non-exhaustive: match_directive");
+	switch (entry.directive.type) {
 		// always matches, never applicable
 		case ML_DT_ROOT:
 			return true;
@@ -365,7 +371,7 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 		case ML_DT_PARAGRAPH: {
 			size_t offset = 0;
 			size_t depth = count_whitespace(parser, &offset);
-			if (depth != directive.depth) {
+			if (depth != entry.directive.depth) {
 				return false;
 			}
 			if (at_whitespace(parser, offset)) {
@@ -392,8 +398,8 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 		}
 		case ML_DT_ORDERED_LIST_ITEM: {
 			size_t offset;
-			size_t depth = count_whitespace_limit(parser, &offset, directive.depth);
-			if (depth != directive.depth) {
+			size_t depth = count_whitespace_limit(parser, &offset, entry.directive.depth);
+			if (depth != entry.directive.depth) {
 				parser->must_match_new_list_item_or_list_ends = LI_ORDERED;
 				return false;
 			}
@@ -412,6 +418,35 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 				*advance_by = offset;
 			return true;
 		}
+		case ML_DT_CODEBLOCK: {
+			// gotta see if we are at the end, if not we just read in raw characters until we peek a newline
+			size_t length = 0;
+			size_t offset;
+			size_t depth = 0;
+			while (peek_char(parser, length, &offset, false) == ':') {
+				length += offset;
+				depth++;
+			}
+			printf("%d\n", (int)depth);
+			if (peek_char(parser, length, &offset, false) == '\n' && depth == entry.directive.depth) {
+				vector_pop(entry.component->codeblock->text);
+				parser->cursor += length;
+				return false;
+			}
+			for (int i = 0; i < depth; i++) {
+				add_char_to_char8_vector(&entry.component->codeblock->text, ':');
+			}
+			uint32_t c;
+			while ((c = peek_char(parser, length, &offset, false)) != '\n') {
+				add_char_to_char8_vector(&entry.component->codeblock->text, c);
+				length += offset;
+			}
+			add_char_to_char8_vector(&entry.component->codeblock->text, '\n');
+			if (advance_by)
+				*advance_by = length;
+			parser->skip_parsing = true;
+			return true;
+		}
 		case ML_DT_COUNT:
 			fprintf(stderr, "unreachable\n");
 			exit(1);
@@ -420,7 +455,7 @@ static bool match_directive(parser_state* parser, markless_directive directive, 
 }
 
 static void add_child_component(markless_component* parent, markless_component* child) {
-	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 13, "non-exhaustive");
 	switch (parent->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			vector_push(parent->root->children, child);
@@ -481,6 +516,10 @@ static void add_child_component(markless_component* parent, markless_component* 
 			}
 			vector_push(parent->unordered_list_item->children, child);
 			return;
+		}
+		case ML_CT_CODEBLOCK: {
+			fprintf(stderr, "Cannot add child %d to codeblock node\n", child->type);
+			exit(1);
 		}
 		case ML_CT_TEXT: {
 			fprintf(stderr, "Cannot add child to text node\n");
@@ -695,6 +734,7 @@ inline_only:
 				count++;
 				offset += advance_by;
 			}
+			if (count < 2) return false;
 			if (peek_char(parser, offset, &advance_by, true) != '\n') {
 				return false;
 			}
@@ -710,6 +750,49 @@ inline_only:
 			entry.component->type = ML_CT_HORIZONTAL_RULE;
 
 			vector_push(parser->stack, entry);
+			return true;
+		} else if (peeked == ':') {
+			int count = 1;
+			size_t offset = advance_by;
+			while (peek_char(parser, offset, &advance_by, true) == ':') {
+				count++;
+				offset += advance_by;
+			}
+			if (count < 2) return false;
+			// code block
+			markless_codeblock* block = (markless_codeblock*)malloc(sizeof(markless_codeblock));
+			memset(block, 0, sizeof(markless_codeblock));
+			// skip spaces
+			while (peek_char(parser, offset, &advance_by, true) == ' ') {
+				offset += advance_by;
+			}
+			// read in the language name
+			uint32_t c = 0;
+			while ((c = peek_char(parser, offset, &advance_by, true)) != '\n' && c != ',') {
+				offset += advance_by;
+				add_char_to_char8_vector(&block->language, c);
+			}
+			if (c == ',') {
+				// read in options
+				offset += advance_by;
+				while ((c = peek_char(parser, offset, &advance_by, true)) != '\n') {
+					offset += advance_by;
+					add_char_to_char8_vector(&block->options, c);
+				}
+			}
+			// let's get set-up to read the codeblock proper
+			entry.directive = (markless_directive){
+				.type  = ML_DT_CODEBLOCK,
+				.depth = (size_t)count,
+			};
+
+			entry.component = (markless_component*)malloc(sizeof(markless_component));
+			entry.component->type = ML_CT_CODEBLOCK;
+			entry.component->codeblock = block;
+
+			parser->cursor += offset;
+			vector_push(parser->stack, entry);
+			parser->skip_parsing = true;
 			return true;
 		}
 	}
@@ -749,7 +832,7 @@ inline_only:
 }
 
 static void cleanup(parser_state* parser, stack_entry disposing) {
-	_Static_assert(ML_DT_COUNT == 8, "non-exhaustive: cleanup");
+	_Static_assert(ML_DT_COUNT == 9, "non-exhaustive: cleanup");
 	switch (disposing.directive.type) {
 		case ML_DT_ROOT:
 			fprintf(stderr, "WE SHOULD NOT BE DISPOSING ROOT\n");
@@ -758,6 +841,7 @@ static void cleanup(parser_state* parser, stack_entry disposing) {
 		case ML_DT_PARAGRAPH:
 		case ML_DT_BLOCKQUOTE_BODY:
 		case ML_DT_BLOCKQUOTE_HEADER:
+		case ML_DT_CODEBLOCK:
 		case ML_DT_HORIZONTAL_RULE: // trivial
 			{
 				size_t idx = (size_t)vector_count(parser->stack) - 2;
@@ -848,9 +932,10 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 		parser->inline_only = false;
 		parser->blockquote_body_special_case = false;
 		parser->must_match_new_list_item_or_list_ends = LI_NONE;
+		parser->skip_parsing = false;
 		for (current_entry = 0; current_entry < vector_count(parser->stack); current_entry++) {
 			size_t advance_by = 0;
-			if (match_directive(parser, parser->stack[current_entry].directive, &advance_by)) {
+			if (match_directive(parser, parser->stack[current_entry], &advance_by)) {
 				parser->cursor += advance_by;
 				continue; // all good
 			} else {
@@ -858,6 +943,17 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 				unwind(parser, current_entry);
 				break;
 			}
+		}
+		if (parser->skip_parsing) {
+			size_t advance_by;
+skip:
+			while (!at_end_of_line(parser)) {
+				peek_char(parser, 0, &advance_by, true);
+				parser->cursor += advance_by;
+			}
+			peek_char(parser, 0, &advance_by, true);
+			parser->cursor += advance_by;
+			continue;
 		}
 
 		//printf("non-invoke matched parsing: ");
@@ -873,6 +969,7 @@ markless_doc* parse_markless_document(sitegen_context* context, sourcebuffer sou
 				}
 				parser->cursor += advance_by;
 			}
+			if (parser->skip_parsing) goto skip;
 		}
 		size_t advance_by;
 		uint32_t c = peek_char(parser, 0, &advance_by, true);

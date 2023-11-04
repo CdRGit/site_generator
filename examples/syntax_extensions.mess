@@ -1,5 +1,5 @@
 # Alt text on images
 :: markless
-[ image(alt text) path.png ]
+[ image path.png, alt A simple image for illustrative purposes ]
 ::
-[ image(alt text) path.png ]
+[ image path.png, alt A simple image for illustrative purposes ]

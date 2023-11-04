@@ -16,7 +16,7 @@ static void free_nodes(vector(markless_component*) components) {
 }
 
 static void free_node(markless_component* component) {
-	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 13, "non-exhaustive");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT: {
 			free_nodes(component->root->children);
@@ -54,6 +54,12 @@ static void free_node(markless_component* component) {
 			free_nodes(component->unordered_list_item->children);
 			free(component->unordered_list_item);
 		} break;
+		case ML_CT_CODEBLOCK: {
+			vector_free(component->codeblock->language);
+			vector_free(component->codeblock->options);
+			vector_free(component->codeblock->text);
+			free(component->codeblock);
+		} break;
 		case ML_CT_TEXT: {
 			vector_free(component->text->text);
 			free(component->text);
@@ -88,7 +94,11 @@ static void print_stringview(stringview view, int depth) {
 	print_indent(depth);
 	for (int i = 0; i < view.len; i++) {
 		char c = view.data[i];
-		printf("%c", c);
+		if (c == '\n') {
+			printf("\n");
+			print_indent(depth);
+		}
+		else printf("%c", c);
 	}
 }
 
@@ -107,58 +117,74 @@ static void print_text(vector(char) text, int depth) {
 }
 
 static void print_node(markless_component* component, int depth) {
-	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 13, "non-exhaustive");
 	switch (component->type) {
 		case ML_CT_ROOT_DOCUMENT: {
-			print_string("ROOT\n", depth);
+			print_string("ROOT", depth);
+			printf("\n");
 			print_nodes(component->root->children, depth+1);
 		} break;
 		case ML_CT_HEADER: {
 			print_string("HEADER(", depth);
 			printf("%d)", component->header->level);
-			print_string("\n", depth);
+			printf("\n");
 			print_nodes(component->header->children, depth+1);
 		} break;
 		case ML_CT_PARAGRAPH: {
-			print_string("PARAGRAPH\n", depth);
+			print_string("PARAGRAPH", depth);
+			printf("\n");
 			print_nodes(component->paragraph->children, depth+1);
 		} break;
 		case ML_CT_BLOCKQUOTE_BODY: {
-			print_string("BLOCKQUOTE(BODY)\n", depth);
+			print_string("BLOCKQUOTE(BODY)", depth);
+			printf("\n");
 			print_nodes(component->blockquote_body->children, depth+1);
 		} break;
 		case ML_CT_BLOCKQUOTE_HEADER: {
-			print_string("BLOCKQUOTE(HEADER)\n", depth);
+			print_string("BLOCKQUOTE(HEADER)", depth);
+			printf("\n");
 			print_nodes(component->blockquote_header->children, depth+1);
 		} break;
 		case ML_CT_ORDERED_LIST: {
-			print_string("ORDERED_LIST\n", depth);
+			print_string("ORDERED_LIST", depth);
+			printf("\n");
 			print_nodes(component->ordered_list->items, depth+1);
 		} break;
 		case ML_CT_ORDERED_LIST_ITEM: {
 			print_string("ORDERED_LIST_ITEM(", depth);
 			printf("%d)", component->ordered_list_item->number);
-			print_string("\n", depth);
+			printf("\n");
 			print_nodes(component->ordered_list_item->children, depth+1);
 		} break;
 		case ML_CT_UNORDERED_LIST: {
-			print_string("UNORDERED_LIST\n", depth);
+			print_string("UNORDERED_LIST", depth);
+			printf("\n");
 			print_nodes(component->unordered_list->items, depth+1);
 		} break;
 		case ML_CT_UNORDERED_LIST_ITEM: {
-			print_string("UNORDERED_LIST_ITEM\n", depth);
+			print_string("UNORDERED_LIST_ITEM", depth);
+			printf("\n");
 			print_nodes(component->unordered_list_item->children, depth+1);
 		} break;
+		case ML_CT_CODEBLOCK: {
+			print_indent(depth);
+			printf("CODEBLOCK('%.*s', '%.*s')\n", (int)vector_count(component->codeblock->language), component->codeblock->language, (int)vector_count(component->codeblock->options), component->codeblock->options);
+			print_text(component->codeblock->text, depth+1);
+			printf("\n");
+		} break;
 		case ML_CT_TEXT: {
-			print_string("TEXT\n", depth);
+			print_string("TEXT", depth);
+			printf("\n");
 			print_text(component->text->text, depth+1);
-			print_string("\n", depth);
+			printf("\n");
 		} break;
 		case ML_CT_NEWLINE: {
-			print_string("<NEWLINE>\n", depth);
+			print_string("<NEWLINE>", depth);
+			printf("\n");
 		} break;
 		case ML_CT_HORIZONTAL_RULE: {
-			print_string("<HORIZONTAL_RULE>\n", depth);
+			print_string("<HORIZONTAL_RULE>", depth);
+			printf("\n");
 		} break;
 		case ML_CT_COUNT:
 			fprintf(stderr, "unreachable\n");

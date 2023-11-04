@@ -53,6 +53,12 @@ typedef struct {
 } markless_unordered_list;
 
 typedef struct {
+	vector(char) language;
+	vector(char) options;
+	vector(char) text;
+} markless_codeblock;
+
+typedef struct {
 	vector(char) text;
 } markless_text;
 
@@ -67,12 +73,13 @@ struct markless_component {
 		ML_CT_ORDERED_LIST_ITEM,
 		ML_CT_UNORDERED_LIST,
 		ML_CT_UNORDERED_LIST_ITEM,
+		ML_CT_CODEBLOCK,
 		ML_CT_TEXT,
 		ML_CT_NEWLINE,
 		ML_CT_HORIZONTAL_RULE,
 		ML_CT_COUNT,
 	} type;
-	_Static_assert(ML_CT_COUNT == 12, "non-exhaustive");
+	_Static_assert(ML_CT_COUNT == 13, "non-exhaustive");
 	union {
 		markless_doc*                 root;
 		markless_header*              header;
@@ -83,6 +90,7 @@ struct markless_component {
 		markless_ordered_list_item*   ordered_list_item;
 		markless_unordered_list*      unordered_list;
 		markless_unordered_list_item* unordered_list_item;
+		markless_codeblock*           codeblock;
 		markless_text*                text;
 		// newline
 		// horizontal_rule
